@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用主题：无 ActionBar，交由 Jetpack Compose 渲染界面 -->
+    <style name="Theme.WallpaperSwitch" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <!-- 磁贴 / 外链跳板专用全透明主题：窗口不可见、无动画、无背景变暗、无预览窗口 -->
+    <style name="Theme.QuickChange.Translucent" parent="android:Theme.Translucent.NoTitleBar">
+        <!-- 禁用启动预览窗口（starting window），从源头消除窗口闪现 -->
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation</item>
+    </style>
+</resources>

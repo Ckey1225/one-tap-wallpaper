@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ========== 网络权限 ========== -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- ========== 系统壁纸设置权限（普通权限，无需运行时弹窗） ========== -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+
+    <!-- ========== 定时切换壁纸相关权限 ========== -->
+    <!-- 精准闹钟（Android 12+ 定时准点触发；未授权时自动降级为宽松调度） -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 电池优化白名单（后台定时任务不被 Doze 拦截） -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- 开机后恢复定时任务 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:name=".WallpaperApp"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@drawable/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.WallpaperSwitch">
+
+        <!-- 主入口（点击图标 / 外链 wallpaper://change）：
+             透明不可见跳板，onCreate 即静默换壁纸后自动关闭 -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.QuickChange.Translucent">
+            <!-- 点击应用图标入口 -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- 外链一键换壁纸：浏览器等外部环境访问 wallpaper://change 即触发 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="wallpaper" android:host="change" />
+            </intent-filter>
+        </activity>
+
+        <!-- 设置界面：长按图标「设置」磁贴进入（无 intent-filter，仅显式启动） -->
+        <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:exported="true" />
+
+        <!-- 换壁纸日志界面：失败通知点击 / 设置页进入 -->
+        <activity
+            android:name=".ui.log.LogActivity"
+            android:exported="false" />
+
+        <!-- 静默换壁纸后台服务：仅应用内部启动，不对外导出 -->
+        <service
+            android:name=".shortcut.QuickWallpaperService"
+            android:exported="false" />
+
+        <!-- 定时换壁纸闹钟接收器（由 AlarmManager 触发，应用内部） -->
+        <receiver
+            android:name=".schedule.QuickChangeAlarmReceiver"
+            android:exported="false" />
+
+        <!-- 开机恢复定时任务 -->
+        <receiver
+            android:name=".schedule.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

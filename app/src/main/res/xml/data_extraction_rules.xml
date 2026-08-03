@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ 数据导出规则：排除缓存/偏好，避免备份无意义数据 -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="cache/"/>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="cache/"/>
+    </device-transfer>
+</data-extraction-rules>
