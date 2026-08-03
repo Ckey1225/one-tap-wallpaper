@@ -23,6 +23,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 使用 debug 签名（无自定义密钥库，便于直接安装）
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
