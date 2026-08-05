@@ -4,4 +4,7 @@
 
     <!-- 长按应用图标磁贴：设置入口 -->
     <string name="shortcut_settings_name">设置</string>
+
+    <!-- 长按应用图标磁贴：切换上一张壁纸 -->
+    <string name="shortcut_previous_name">上一张壁纸</string>
 </resources>

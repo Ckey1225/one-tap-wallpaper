@@ -1,7 +1,6 @@
 package com.example.wallpaper.ui.settings
 
 import android.content.Context
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -22,7 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -54,10 +53,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.wallpaper.data.PreferenceStore
+import com.example.wallpaper.data.WallpaperCache
 import com.example.wallpaper.domain.WallpaperTarget
 import com.example.wallpaper.permission.PermissionGuide
-import com.example.wallpaper.ui.log.LogActivity
-import com.example.wallpaper.ui.log.CacheGalleryActivity
+import com.example.wallpaper.ui.log.WallpaperGallery
 
 /** 定时切换间隔选项（毫秒, 显示文案） */
 private val scheduleOptions: List<Pair<Long, String>> = listOf(
@@ -70,16 +70,22 @@ private val scheduleOptions: List<Pair<Long, String>> = listOf(
     24 * 60 * 60 * 1000L to "24 小时"
 )
 
+/** 壁纸记录保留条数选项 */
+private val logCountOptions = listOf(10, 30, 50, 100)
+
+/** 缓存数量选项 */
+private val cacheSizeOptions = listOf(3, 5, 10, 20, 50, 100)
+
 /**
- * 设置界面（UI Layer）：底部导航栏 + 4 个分区，人性化归类。
+ * 设置界面（UI Layer）：底部导航栏 + 4 个分区。
  *
  * 点击应用图标 = 直接静默换壁纸（不经过本界面）；
  * 长按图标「设置」磁贴 = 进入本界面。
  *
- * - 「换壁纸」：立即换壁纸 + 图片 API + 壁纸模式
- * - 「缓存」：当前缓存状态 / 手动补充 / 查看缓存壁纸
- * - 「定时」：定时切换开关 / 间隔 / 后台保护引导
- * - 「记录」：查看壁纸记录（大图画廊，右上角可设保留条数）
+ * - 「换壁纸」：图片 API + 壁纸模式，立即换壁纸按钮固定在页面底部
+ * - 「缓存」：直接内联展示缓存壁纸列表（长按保存原图到相册）
+ * - 「记录」：直接内联展示历史壁纸列表（长按保存原图到相册）
+ * - 「设置」：定时切换 / 权限管理 / 记录保留条数 / 缓存管理
  */
 @Composable
 fun SettingsScreen(
@@ -117,14 +123,14 @@ fun SettingsScreen(
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
-                    label = { Text("定时") }
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+                    label = { Text("记录") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
-                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-                    label = { Text("记录") }
+                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                    label = { Text("设置") }
                 )
             }
         }
@@ -139,15 +145,13 @@ fun SettingsScreen(
                     context = context, vm = vm,
                     imageUrl = imageUrl, target = target, uiState = uiState
                 )
-                1 -> CacheTab(
+                1 -> CacheTab(context)
+                2 -> RecordsTab(context)
+                else -> SettingsTab(
                     context = context, vm = vm,
+                    scheduleEnabled = scheduleEnabled, scheduleIntervalMs = scheduleIntervalMs,
                     cacheSize = cacheSize, cacheCount = cacheCount, prefetching = prefetching
                 )
-                2 -> ScheduleTab(
-                    context = context, vm = vm,
-                    scheduleEnabled = scheduleEnabled, scheduleIntervalMs = scheduleIntervalMs
-                )
-                else -> RecordsTab(context)
             }
         }
     }
@@ -163,103 +167,156 @@ private fun WallpaperTab(
     target: WallpaperTarget,
     uiState: SettingsUiState,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        SectionTitle("换壁纸", "点击应用图标即静默换壁纸；长按图标可回到本设置页")
-        Spacer(Modifier.height(20.dp))
-
-        // 立即换壁纸（手动验证配置）+ 状态：居中大按钮
-        Button(
-            onClick = { vm.changeWallpaper(context) },
-            enabled = !uiState.isLoading,
-            shape = RoundedCornerShape(28.dp),
-            modifier = Modifier.size(width = 230.dp, height = 60.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 可滚动配置区（图片 API / 壁纸模式）
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            } else {
-                Text("立即换壁纸", style = MaterialTheme.typography.titleLarge)
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        val statusColor = if (uiState.isError) MaterialTheme.colorScheme.error
-            else MaterialTheme.colorScheme.onSurfaceVariant
-        Text(
-            text = uiState.statusText.ifEmpty { "换壁纸全程静默，结果记录在壁纸记录中" },
-            style = MaterialTheme.typography.bodyMedium,
-            color = statusColor
-        )
-        Spacer(Modifier.height(24.dp))
-        HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f))
-        Spacer(Modifier.height(20.dp))
+            SectionTitle("换壁纸", "点击应用图标即静默换壁纸；长按图标可回到本设置页")
+            Spacer(Modifier.height(20.dp))
 
-        // 图片 API 地址
-        OutlinedTextField(
-            value = imageUrl,
-            onValueChange = vm::updateImageUrl,
-            label = { Text("图片 API 地址") },
-            placeholder = { Text("http://...") },
-            supportingText = { Text("需直接返回图片（如 t.alcy.cc/pc/）") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.None,
-                keyboardType = KeyboardType.Uri
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(20.dp))
+            // 图片 API 地址
+            OutlinedTextField(
+                value = imageUrl,
+                onValueChange = vm::updateImageUrl,
+                label = { Text("图片 API 地址") },
+                placeholder = { Text("http://...") },
+                supportingText = { Text("需直接返回图片（如 t.alcy.cc/pc/）") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.None,
+                    keyboardType = KeyboardType.Uri
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(20.dp))
 
-        // 壁纸目标（主屏 / 锁屏 / 主屏+锁屏）
-        Text("壁纸设置模式", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            WallpaperTarget.entries.forEach { t ->
-                val selected = t == target
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                            RoundedCornerShape(12.dp)
+            // 壁纸目标（主屏 / 锁屏 / 主屏+锁屏）
+            Text("壁纸设置模式", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                WallpaperTarget.entries.forEach { t ->
+                    val selected = t == target
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 4.dp)
+                            .clickable { vm.updateTarget(t) }
+                    ) {
+                        RadioButton(selected = selected, onClick = { vm.updateTarget(t) })
+                        Text(
+                            text = t.displayName,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(end = 4.dp)
                         )
-                        .padding(horizontal = 4.dp, vertical = 4.dp)
-                        .clickable { vm.updateTarget(t) }
-                ) {
-                    RadioButton(selected = selected, onClick = { vm.updateTarget(t) })
-                    Text(
-                        text = t.displayName,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
+                    }
                 }
             }
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f))
+            Spacer(Modifier.height(20.dp))
         }
-        Spacer(Modifier.height(24.dp))
-        HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f))
-        Spacer(Modifier.height(20.dp))
+
+        // 立即换壁纸：固定页面底部，层级清晰、操作便捷
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp)
+        ) {
+            Button(
+                onClick = { vm.changeWallpaper(context) },
+                enabled = !uiState.isLoading,
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+            ) {
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                } else {
+                    Text("立即换壁纸", style = MaterialTheme.typography.titleLarge)
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = uiState.statusText.ifEmpty { "换壁纸全程静默，结果记录在壁纸记录中" },
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (uiState.isError) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+        }
     }
 }
 
-// ==================== Tab 2：缓存 ====================
+// ==================== Tab 2：缓存（内联展示壁纸列表） ====================
 
 @Composable
-private fun CacheTab(
+private fun CacheTab(context: Context) {
+    val appContext = context.applicationContext
+    val cache = remember { WallpaperCache(appContext) }
+    val cacheSize = remember { PreferenceStore(appContext).cacheSize }
+    val files = remember { cache.cachedItems().take(WallpaperCache.MAX_APPLIED) }
+
+    WallpaperGallery(
+        files = files,
+        cache = cache,
+        headerText = "缓存中 ${files.size} 张 / 目标 $cacheSize 张 · 长按保存到相册",
+        emptyText = "缓存中没有壁纸，换壁纸后会自动预取",
+        modifier = Modifier.fillMaxSize()
+    )
+}
+
+// ==================== Tab 3：记录（内联展示历史壁纸） ====================
+
+@Composable
+private fun RecordsTab(context: Context) {
+    val appContext = context.applicationContext
+    val cache = remember { WallpaperCache(appContext) }
+    val maxCount = remember { PreferenceStore(appContext).logMaxCount }
+    val files = remember(maxCount) { cache.appliedItems().take(maxCount) }
+
+    WallpaperGallery(
+        files = files,
+        cache = cache,
+        headerText = "共 ${files.size} 张已用过的壁纸 · 长按保存到相册",
+        emptyText = "还没有换过壁纸",
+        modifier = Modifier.fillMaxSize()
+    )
+}
+
+// ==================== Tab 4：设置（汇总管理） ====================
+
+@Composable
+private fun SettingsTab(
     context: Context,
     vm: SettingsViewModel,
+    scheduleEnabled: Boolean,
+    scheduleIntervalMs: Long,
     cacheSize: Int,
     cacheCount: Int,
     prefetching: Boolean,
 ) {
+    val appContext = context.applicationContext
+    // 记录保留条数（局部状态 + 持久化）
+    var logMaxCount by remember { mutableIntStateOf(PreferenceStore(appContext).logMaxCount) }
+    // 缓存数量选择对话框
+    var showCacheSizeDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -267,10 +324,144 @@ private fun CacheTab(
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        SectionTitle("壁纸缓存", "自动预取壁纸，换壁纸时从缓存秒换，不再等待网络")
+        SectionTitle("设置", "集中管理定时切换、权限、记录与缓存")
 
-        // 当前缓存状态卡片
+        // ---------- 1. 定时换壁纸 ----------
         Spacer(Modifier.height(20.dp))
+        Text("定时换壁纸", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (scheduleEnabled) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                    RoundedCornerShape(12.dp)
+                )
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (scheduleEnabled) "已开启" else "已关闭",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (scheduleEnabled) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = if (scheduleEnabled) "到点自动换壁纸" else "打开后按间隔自动换壁纸",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (scheduleEnabled) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = scheduleEnabled,
+                onCheckedChange = { vm.setScheduleEnabled(context, it) }
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("切换间隔", style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            scheduleOptions.forEach { (ms, label) ->
+                val selected = ms == scheduleIntervalMs
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        .clickable { vm.setScheduleInterval(context, ms) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(label, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f))
+        Spacer(Modifier.height(4.dp))
+
+        // ---------- 2. 应用权限管理 ----------
+        Text("应用权限", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
+        val batteryExempt = remember { PermissionGuide.isIgnoringBatteryOptimizations(context) }
+        Text(
+            text = if (batteryExempt) "电池优化：已豁免，后台可正常唤醒"
+            else "电池优化：未豁免，定时任务可能被系统延迟或拦截",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (batteryExempt) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.error
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { PermissionGuide.requestBatteryOptimizationExemption(context) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("电池优化白名单")
+            }
+            OutlinedButton(
+                onClick = { PermissionGuide.openAutoStartSettings(context) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("自启动管理")
+            }
+        }
+        Text(
+            text = "国产 ROM（MIUI/EMUI/ColorOS 等）需在自启动管理中将本应用设为允许，否则定时任务可能被杀",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        Spacer(Modifier.height(20.dp))
+        HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f))
+        Spacer(Modifier.height(4.dp))
+
+        // ---------- 3. 壁纸记录保留条数 ----------
+        Text("壁纸记录", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "最多保留最近用过的壁纸，超出自动清理最早的记录：$logMaxCount 条",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            logCountOptions.forEach { count ->
+                val selected = count == logMaxCount
+                TextButton(onClick = {
+                    logMaxCount = count
+                    PreferenceStore(appContext).logMaxCount = count
+                }) {
+                    Text(
+                        text = "$count",
+                        color = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f))
+        Spacer(Modifier.height(4.dp))
+
+        // ---------- 4. 缓存管理 ----------
+        Text("缓存管理", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -296,15 +487,14 @@ private fun CacheTab(
                 else MaterialTheme.colorScheme.error
             )
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
 
         // 缓存数量选择
-        var showCacheSizeDialog by remember { mutableStateOf(false) }
-        val cacheSizeOptions = listOf(3, 5, 10, 20, 50, 100)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .clickable { showCacheSizeDialog = true }
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -347,24 +537,7 @@ private fun CacheTab(
                 }
             )
         }
-
-        Spacer(Modifier.height(20.dp))
-
-        // 查看缓存壁纸（长按保存原图到相册）
-        Button(
-            onClick = { context.startActivity(Intent(context, CacheGalleryActivity::class.java)) },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("查看缓存壁纸")
-        }
-        Text(
-            text = "打开缓存图片列表，长按缩略图可保存原图到相册",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
 
         // 手动补充缓存
         OutlinedButton(
@@ -378,158 +551,6 @@ private fun CacheTab(
                 Text(if (cacheCount < cacheSize) "立即补充缓存" else "缓存已满")
             }
         }
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-// ==================== Tab 3：定时 ====================
-
-@Composable
-private fun ScheduleTab(
-    context: Context,
-    vm: SettingsViewModel,
-    scheduleEnabled: Boolean,
-    scheduleIntervalMs: Long,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        SectionTitle("定时切换壁纸", "到点自动换壁纸，同样优先走缓存、秒换")
-
-        // 开关状态卡片
-        Spacer(Modifier.height(20.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (scheduleEnabled) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceVariant,
-                    RoundedCornerShape(12.dp)
-                )
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = if (scheduleEnabled) "已开启" else "已关闭",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (scheduleEnabled) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = if (scheduleEnabled) "到点自动换壁纸" else "打开后按间隔自动换壁纸",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (scheduleEnabled) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Switch(
-                checked = scheduleEnabled,
-                onCheckedChange = { vm.setScheduleEnabled(context, it) }
-            )
-        }
-        Spacer(Modifier.height(20.dp))
-
-        // 间隔选择
-        Text("切换间隔", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            scheduleOptions.forEach { (ms, label) ->
-                val selected = ms == scheduleIntervalMs
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        )
-                        .clickable { vm.setScheduleInterval(context, ms) }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(label, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-        Spacer(Modifier.height(24.dp))
-        HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f))
-        Spacer(Modifier.height(20.dp))
-
-        // 后台保护 / 自启动引导
-        Text("后台保护", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        val batteryExempt = remember { PermissionGuide.isIgnoringBatteryOptimizations(context) }
-        Text(
-            text = if (batteryExempt) "电池优化：已豁免，后台可正常唤醒"
-            else "电池优化：未豁免，定时任务可能被系统延迟或拦截",
-            style = MaterialTheme.typography.bodySmall,
-            color = if (batteryExempt) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.error
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = { PermissionGuide.requestBatteryOptimizationExemption(context) },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("电池优化白名单")
-            }
-            OutlinedButton(
-                onClick = { PermissionGuide.openAutoStartSettings(context) },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("自启动管理")
-            }
-        }
-        Text(
-            text = "国产 ROM（MIUI/EMUI/ColorOS 等）需在自启动管理中将本应用设为允许，否则定时任务可能被杀",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-// ==================== Tab 4：记录 ====================
-
-@Composable
-private fun RecordsTab(
-    context: Context,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        SectionTitle("壁纸记录", "记录每次换壁纸结果与应用过的壁纸，成功失败都保留")
-
-        Spacer(Modifier.height(20.dp))
-
-        // 查看壁纸记录（大图画廊）
-        Button(
-            onClick = { context.startActivity(Intent(context, LogActivity::class.java)) },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("查看壁纸记录")
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "以大图方式查看每次应用过的壁纸，右上角可设置保留条数",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         Spacer(Modifier.height(24.dp))
     }
 }

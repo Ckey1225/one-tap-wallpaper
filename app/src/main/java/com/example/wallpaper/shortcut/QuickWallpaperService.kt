@@ -38,8 +38,11 @@ class QuickWallpaperService : Service() {
                 val entryName = intent?.getStringExtra(EXTRA_ENTRY)
                 val entry = ChangeEntry.entries.firstOrNull { it.name == entryName } ?: ChangeEntry.ICON
 
-                // 唯一的换壁纸方法（内部含缓存优先、失败兜底下载、写记录、定时续排）
-                WallpaperChanger.change(applicationContext, entry)
+                // "切换上一张"走专属方法，其余统一走常规换壁纸
+                when (entry) {
+                    ChangeEntry.PREVIOUS -> WallpaperChanger.changePrevious(applicationContext)
+                    else -> WallpaperChanger.change(applicationContext, entry)
+                }
                 // 结果已写入"壁纸记录"，不弹任何通知 / Toast
             } catch (t: Throwable) {
                 // 捕获所有异常与错误（含 OOM），保证静默任务绝不拖垮进程

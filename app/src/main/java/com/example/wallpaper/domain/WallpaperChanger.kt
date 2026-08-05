@@ -20,7 +20,10 @@ enum class ChangeEntry(val label: String) {
     SCHEDULE("定时"),
 
     /** 设置页手动点击"立即换壁纸" */
-    MANUAL("设置页")
+    MANUAL("设置页"),
+
+    /** 长按图标磁贴"切换上一张" */
+    PREVIOUS("上一张")
 }
 
 /**
@@ -96,6 +99,41 @@ object WallpaperChanger {
             cache.ensureFullAsync()
         }
         return result
+    }
+
+    /**
+     * 切换上一张壁纸（长按图标磁贴入口）。
+     *
+     * 从已应用历史中取"当前壁纸的上一张"（历史最新在前，[0]=当前、[1]=上一张），
+     * 重新应用到目标壁纸；不改变缓存队列与历史文件本身，仅写入一条记录。
+     */
+    suspend fun changePrevious(context: Context): ChangeResult {
+        val appContext = context.applicationContext
+        val prefs = PreferenceStore(appContext)
+        val target = prefs.target
+        val cache = WallpaperCache(appContext)
+
+        // 历史最新在前：[0] 是当前壁纸，上一张是 [1]
+        val prev = cache.appliedItems().drop(1).firstOrNull()
+        if (prev == null) {
+            val result = ChangeResult(success = false, message = "没有上一张壁纸")
+            prefs.addLog(ChangeEntry.PREVIOUS.name, false, result.message, "")
+            return result
+        }
+
+        return try {
+            val bitmap = cache.decodeImage(prev) ?: throw IOException("上一张壁纸解码失败")
+            WallpaperManagerWrapper.setWallpaper(appContext, bitmap, target)
+            prefs.addLog(ChangeEntry.PREVIOUS.name, true, "切换上一张（${target.displayName}）", prev.name ?: "")
+            if (prefs.scheduleEnabled) {
+                WallpaperScheduler.schedule(appContext, prefs.scheduleIntervalMs)
+            }
+            ChangeResult(success = true, message = "已切换上一张（${target.displayName}）")
+        } catch (t: Throwable) {
+            val result = ChangeResult(success = false, message = t.message ?: "未知错误")
+            prefs.addLog(ChangeEntry.PREVIOUS.name, false, result.message, prev.name ?: "")
+            result
+        }
     }
 
     private const val TAG = "WallpaperChanger"

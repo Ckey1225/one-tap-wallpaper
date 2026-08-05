@@ -36,10 +36,14 @@ class MainActivity : Activity() {
 
     private fun triggerSilentChange(source: Intent?) {
         try {
-            // 区分触发来源：外链（wallpaper://change）还是直接点击图标，用于日志
+            // 区分触发来源：外链（wallpaper://change）、磁贴"切换上一张"、点击图标
             val data = source?.data
             val isDeepLink = data?.scheme == "wallpaper" && data.host == "change"
-            val entry = if (isDeepLink) ChangeEntry.DEEP_LINK else ChangeEntry.ICON
+            val entry = when {
+                source?.getBooleanExtra(EXTRA_PREVIOUS, false) == true -> ChangeEntry.PREVIOUS
+                isDeepLink -> ChangeEntry.DEEP_LINK
+                else -> ChangeEntry.ICON
+            }
 
             val service = Intent(this, QuickWallpaperService::class.java)
                 .putExtra(QuickWallpaperService.EXTRA_ENTRY, entry.name)
@@ -54,7 +58,10 @@ class MainActivity : Activity() {
         }
     }
 
-    private companion object {
+    companion object {
         private const val TAG = "MainActivity"
+
+        /** 磁贴"切换上一张壁纸"标识（Extra） */
+        const val EXTRA_PREVIOUS = "extra_previous"
     }
 }
