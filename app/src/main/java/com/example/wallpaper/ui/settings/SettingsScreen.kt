@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -37,10 +38,12 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -293,6 +296,58 @@ private fun CacheTab(
                 else MaterialTheme.colorScheme.error
             )
         }
+        Spacer(Modifier.height(20.dp))
+
+        // 缓存数量选择
+        var showCacheSizeDialog by remember { mutableStateOf(false) }
+        val cacheSizeOptions = listOf(3, 5, 10, 20, 50, 100)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { showCacheSizeDialog = true }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("缓存数量", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "$cacheSize 张",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        if (showCacheSizeDialog) {
+            AlertDialog(
+                onDismissRequest = { showCacheSizeDialog = false },
+                title = { Text("缓存数量") },
+                text = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        cacheSizeOptions.forEach { size ->
+                            TextButton(
+                                onClick = {
+                                    vm.setCacheSize(size)
+                                    showCacheSizeDialog = false
+                                }
+                            ) {
+                                Text(
+                                    "$size",
+                                    color = if (size == cacheSize) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showCacheSizeDialog = false }) { Text("取消") }
+                }
+            )
+        }
+
         Spacer(Modifier.height(20.dp))
 
         // 查看缓存壁纸（长按保存原图到相册）

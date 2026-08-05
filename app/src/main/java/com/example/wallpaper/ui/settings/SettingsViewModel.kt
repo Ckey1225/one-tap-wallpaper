@@ -96,6 +96,15 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** 修改缓存预取数量：持久化，并立即补充或裁剪 */
+    fun setCacheSize(size: Int) {
+        val clamped = size.coerceIn(PreferenceStore.MIN_CACHE_SIZE, PreferenceStore.MAX_CACHE_SIZE)
+        _cacheSize.value = clamped
+        prefs.cacheSize = clamped
+        if (clamped > _cacheCount.value) prefetch()
+        else refreshCacheCount()
+    }
+
     /**
      * 手动补充缓存到目标数量
      */

@@ -146,10 +146,10 @@ class PreferenceStore(context: Context) {
         /** 默认定时间隔：2 小时 */
         const val DEFAULT_INTERVAL_MS = 2 * 60 * 60 * 1000L
 
-        /** 缓存预取数量范围与默认值（队列上限放开到 100） */
+        /** 缓存预取数量范围与默认值（用户可自定义，上限 100） */
         const val MIN_CACHE_SIZE = 2
         const val MAX_CACHE_SIZE = 100
-        const val DEFAULT_CACHE_SIZE = 100
+        const val DEFAULT_CACHE_SIZE = 5
 
         /** 记录条数默认值与下限 */
         const val MIN_LOG_MAX_COUNT = 10
