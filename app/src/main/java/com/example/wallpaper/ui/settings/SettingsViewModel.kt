@@ -31,10 +31,9 @@ data class SettingsUiState(
  * 负责：
  * - 图片 API 地址 / 壁纸目标（主屏、锁屏、主屏+锁屏）的读写与持久化
  * - 定时切换开关与间隔（开启即调度，关闭即取消）
- * - 缓存预取数量（2~5 张）与壁纸记录保留条数
+ * - 缓存数量状态 / 手动补充缓存（"立即预取"）
  * - "立即换壁纸"：同样调用唯一的换壁纸方法 [WallpaperChanger.change]
  *   （触发来源 MANUAL），仅把结果状态展示在本界面
- * - 手动补充缓存（"立即预取"）
  */
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -58,14 +57,8 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private val _cacheCount = MutableStateFlow(WallpaperCache(app).cachedCount())
     val cacheCount: StateFlow<Int> = _cacheCount.asStateFlow()
 
-    private val _cacheDirUri = MutableStateFlow(prefs.cacheDirUri)
-    val cacheDirUri: StateFlow<String> = _cacheDirUri.asStateFlow()
-
     private val _prefetching = MutableStateFlow(false)
     val prefetching: StateFlow<Boolean> = _prefetching.asStateFlow()
-
-    private val _logMaxCount = MutableStateFlow(prefs.logMaxCount)
-    val logMaxCount: StateFlow<Int> = _logMaxCount.asStateFlow()
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -112,19 +105,8 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 设置自定义缓存目录（SAF 授权后由 Activity 传入 content:// URI 并持久化）。
-     * 传空字符串 = 恢复默认目录（Android/data/<包名>/files/wallpapers）。
+     * 手动补充缓存到目标数量
      */
-    fun setCacheDir(uri: String) {
-        _cacheDirUri.value = uri
-        prefs.cacheDirUri = uri
-        refreshCacheCount()
-    }
-
-    /** 恢复默认缓存目录 */
-    fun resetCacheDir() = setCacheDir("")
-
-    /** 手动补充缓存到目标数量 */
     fun prefetch() {
         if (_prefetching.value) return
         viewModelScope.launch {
@@ -140,12 +122,6 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     /** 刷新当前缓存数量 */
     fun refreshCacheCount() {
         _cacheCount.value = WallpaperCache(getApplication()).cachedCount()
-    }
-
-    /** 修改壁纸记录保留条数：持久化 */
-    fun setLogMaxCount(count: Int) {
-        _logMaxCount.value = count
-        prefs.logMaxCount = count
     }
 
     /**

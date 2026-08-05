@@ -62,6 +62,11 @@
             android:name=".ui.log.LogActivity"
             android:exported="false" />
 
+        <!-- 缓存壁纸画廊：设置页「缓存」标签进入，长按保存原图到相册 -->
+        <activity
+            android:name=".ui.log.CacheGalleryActivity"
+            android:exported="false" />
+
         <!-- 静默换壁纸后台服务：仅应用内部启动，不对外导出 -->
         <service
             android:name=".shortcut.QuickWallpaperService"

@@ -57,9 +57,9 @@ object WallpaperChanger {
         var result: ChangeResult
         // 成功应用的那张壁纸文件名（写进记录，供"壁纸记录"页展示缩略图）
         var appliedName = ""
+        val cache = WallpaperCache(appContext)
         try {
             // 1. 优先从本地缓存队列取最旧一张（序号 1）并移入历史
-            val cache = WallpaperCache(appContext)
             val cached = cache.takeForApply()
             val bitmap = if (cached != null) {
                 appliedName = cached.name ?: ""
@@ -91,9 +91,9 @@ object WallpaperChanger {
             if (prefs.scheduleEnabled) {
                 WallpaperScheduler.schedule(appContext, prefs.scheduleIntervalMs)
             }
-            // 补充预取一张到队列尾部，保证下次点击依然命中缓存；
-            // 预取失败不影响本次结果（静默忽略，下次时机自动重试）
-            runCatching { WallpaperCache(appContext).ensureFull() }
+            // 补充预取：非阻塞（fire-and-forget），立即返回不拖慢换壁纸。
+            // 后台并行补满缓存到队尾，失败静默忽略、下次时机自动重试。
+            cache.ensureFullAsync()
         }
         return result
     }

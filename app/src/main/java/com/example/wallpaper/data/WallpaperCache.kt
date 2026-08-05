@@ -6,9 +6,14 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 壁纸缓存管理器（FIFO 队列式预取缓存）。
@@ -77,9 +82,11 @@ class WallpaperCache(context: Context) {
 
     /**
      * 从缓存队列取最旧一张（序号 1）并移入已应用历史。
+     * 取操作用独立短锁保护（[takeLock]），与后台预取（[fullLock]）互不阻塞，
+     * 确保快速连点换壁纸时始终秒级命中缓存、不被预取拖慢。
      * @return 移入历史后的壁纸；队列为空时返回 null（调用方回退实时下载）
      */
-    fun takeForApply(): DocumentFile? = backend.takeForApply()
+    fun takeForApply(): DocumentFile? = synchronized(takeLock) { backend.takeForApply() }
 
     /**
      * 保存一张已应用壁纸（实时下载兜底场景）到历史目录。
@@ -100,16 +107,44 @@ class WallpaperCache(context: Context) {
         backend.decode(doc, maxDimension)
 
     /**
+     * 打开壁纸文件的原始字节流（File 与 SAF 统一入口）。
+     * 用于"导出原图到相册"等需要完整原图数据的场景；失败返回 null。
+     */
+    fun open(doc: DocumentFile): java.io.InputStream? = runCatching {
+        backend.openStream(doc)
+    }.getOrNull()?.let { it }
+
+    /**
      * 补充预取直到缓存队列满（数量 = 配置值）。
      * 队列已满时立即返回 true；网络失败时中断，下次换壁纸 / 启动时机自动重试。
+     * 全程持有 [fullLock]，与 [takeForApply] 的 [takeLock] 相互独立，不阻塞取缓存。
      * @return 是否达到配置数量
      */
-    suspend fun ensureFull(): Boolean = synchronized(this) {
+    suspend fun ensureFull(): Boolean = synchronized(fullLock) {
         var ok = true
         while (ok && cachedCount() < prefs.cacheSize) {
             ok = prefetchOne(prefs.imageUrl)
         }
         cachedCount() >= prefs.cacheSize
+    }
+
+    /**
+     * 非阻塞补预取（fire-and-forget）。
+     * 在后台协程补满缓存，立即返回，不拖慢换壁纸/启动；
+     * 同一时间只允许一个预取任务，连点/多入口并发时不会重复下载。
+     */
+    fun ensureFullAsync() {
+        if (cachedCount() >= prefs.cacheSize) return
+        if (!prefetchRunning.compareAndSet(false, true)) return
+        prefetchScope.launch {
+            try {
+                ensureFull()
+            } catch (e: Exception) {
+                Log.w(TAG, "后台补预取失败：${e.message}")
+            } finally {
+                prefetchRunning.set(false)
+            }
+        }
     }
 
     /** 临时下载文件（应用缓存目录，仅中转，不落盘持久存储） */
@@ -186,6 +221,18 @@ class WallpaperCache(context: Context) {
         /** 已应用历史最多保留文件数 */
         const val MAX_APPLIED = 100
 
+        /** 后台预取协程作用域（进程级单例，不随页面销毁） */
+        private val prefetchScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        /** 后台预取运行标志：同一时间只允许一个预取任务，防连点/多入口重复下载 */
+        private val prefetchRunning = AtomicBoolean(false)
+
+        /** 取缓存短锁：只保护"取最旧一张"的原子性，几毫秒即释放，绝不阻塞换壁纸 */
+        private val takeLock = Any()
+
+        /** 预取长锁：串行化网络预取（下载慢），与取缓存锁相互独立 */
+        private val fullLock = Any()
+
         /**
          * 按目标最大边长采样解码本地图片文件，防止 OOM。
          * @param maxDimension 采样后长边上限；传 0 时仅读取尺寸信息
@@ -223,6 +270,9 @@ class WallpaperCache(context: Context) {
 
         /** 解码单张壁纸（采样，防 OOM） */
         fun decode(doc: DocumentFile, maxDimension: Int): Bitmap?
+
+        /** 打开壁纸原始字节流（供导出原图到相册） */
+        fun openStream(doc: DocumentFile): java.io.InputStream
     }
 
     /** 默认目录后端：直接 File 操作（最快，rename 移动） */
@@ -265,6 +315,9 @@ class WallpaperCache(context: Context) {
 
         override fun decode(doc: DocumentFile, maxDimension: Int): Bitmap? =
             decodeFile(File(doc.uri.path!!), maxDimension)
+
+        override fun openStream(doc: DocumentFile): java.io.InputStream =
+            File(doc.uri.path!!).inputStream()
 
         private fun trimApplied() {
             val files = appliedDir().listFiles { f -> f.isFile } ?: return
@@ -340,6 +393,10 @@ class WallpaperCache(context: Context) {
                 BitmapFactory.decodeStream(it, null, opts2)
             }
         }
+
+        override fun openStream(doc: DocumentFile): java.io.InputStream =
+            appContext.contentResolver.openInputStream(doc.uri)
+                ?: throw java.io.IOException("无法打开：${doc.name}")
 
         private fun trimApplied() {
             val files = appliedItems()

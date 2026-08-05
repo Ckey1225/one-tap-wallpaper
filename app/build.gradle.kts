@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.wallpaper"
         minSdk = 24            // Android 7.0，覆盖锁屏壁纸 API（API 24+）
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildTypes {

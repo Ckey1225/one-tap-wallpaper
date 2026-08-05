@@ -39,8 +39,9 @@ class WallpaperApp : Application() {
 
         // 后台预取壁纸缓存（FIFO 队列，默认 3 张），
         // 让点击图标 / 外链换壁纸时能直接命中本地缓存、瞬间完成。
+        // 非阻塞：不拖慢应用启动，失败静默、下次换壁纸后自动重试。
         appScope.launch {
-            runCatching { WallpaperCache(this@WallpaperApp).ensureFull() }
+            runCatching { WallpaperCache(this@WallpaperApp).ensureFullAsync() }
                 .onFailure { Log.w(TAG, "启动预取缓存失败（下次换壁纸后自动重试）：${it.message}") }
         }
     }
