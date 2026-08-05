@@ -8,6 +8,10 @@
     <!-- ========== 系统壁纸设置权限（普通权限，无需运行时弹窗） ========== -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
+    <!-- Android 9 及以下"保存原图到相册"需写入外部存储（Android 10+ 由 MediaStore 接管，无需权限） -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <!-- ========== 定时切换壁纸相关权限 ========== -->
     <!-- 精准闹钟（Android 12+ 定时准点触发；未授权时自动降级为宽松调度） -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />

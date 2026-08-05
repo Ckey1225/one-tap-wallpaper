@@ -88,8 +88,8 @@ private fun RecordScreen(context: Context) {
 
     var maxCount by remember { mutableIntStateOf(prefs.logMaxCount) }
     var showSettings by remember { mutableStateOf(false) }
-    // 打开直接读历史已应用壁纸（最新在前），按保留条数裁剪展示
-    val files by remember { mutableStateOf(cache.appliedItems().take(prefs.logMaxCount)) }
+    // 打开直接读历史已应用壁纸（最新在前）；key 跟随 maxCount，改保留条数后立即刷新列表
+    val files by remember(maxCount) { mutableStateOf(cache.appliedItems().take(maxCount)) }
 
     Scaffold(
         topBar = {

@@ -96,14 +96,6 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** 修改缓存预取数量：持久化，并立即补充到新数量 */
-    fun setCacheSize(size: Int) {
-        _cacheSize.value = size
-        prefs.cacheSize = size
-        if (size > _cacheCount.value) prefetch()
-        else refreshCacheCount()
-    }
-
     /**
      * 手动补充缓存到目标数量
      */

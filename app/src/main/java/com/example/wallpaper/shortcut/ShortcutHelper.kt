@@ -21,9 +21,6 @@ object ShortcutHelper {
 
     private const val TAG = "ShortcutHelper"
 
-    /** 外链一键换壁纸：浏览器访问该地址即静默更换壁纸（对应 Manifest 中 deep link） */
-    const val DEEP_LINK = "wallpaper://change"
-
     /** 设置磁贴唯一 ID（同名重复注册即覆盖更新） */
     const val SETTINGS_SHORTCUT_ID = "settings"
 
@@ -48,7 +45,6 @@ object ShortcutHelper {
 
             val shortcut = builder
                 .setShortLabel(context.getString(R.string.shortcut_settings_name))
-                .setLongLabel(context.getString(R.string.shortcut_settings_long_name))
                 .setIcon(IconCompat.createWithResource(context, R.drawable.ic_launcher))
                 .setIntent(settingsIntent)
                 .build()

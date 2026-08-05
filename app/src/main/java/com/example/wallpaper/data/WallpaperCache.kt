@@ -3,7 +3,6 @@ package com.example.wallpaper.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.CoroutineScope
@@ -25,8 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - 已应用壁纸文件按时间保留最近 [MAX_APPLIED] 张，供"壁纸记录"页展示缩略图。
  *
  * 存储位置（用户要求，外部可见，方便直接查看缓存壁纸）：
- * - 默认目录：Android/data/<包名>/files/wallpapers/（应用专属外部目录，无需权限）
- * - 自定义目录：设置页通过 SAF 选择任意目录（content:// 持久授权）
+ * - 唯一目录：Android/data/<包名>/files/wallpapers/（应用专属外部目录，无需权限）
  * - 子目录结构：cache/（待用队列，序号 1 最先被应用）、applied/（已应用历史）
  *
  * 文件后缀：下载内容按真实格式保存为 .jpg 或 .png；
@@ -37,22 +35,13 @@ class WallpaperCache(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = PreferenceStore(appContext)
 
-    /** 根目录（File 模式 = file://，自定义 SAF 模式 = content://） */
+    /** 根目录（应用专属外部目录，无需任何权限） */
     private val rootDoc: DocumentFile
     private val backend: Backend
 
     init {
-        val customUri = prefs.cacheDirUri
-        rootDoc = if (customUri.isNotBlank()) {
-            DocumentFile.fromTreeUri(appContext, Uri.parse(customUri)) ?: defaultRoot()
-        } else {
-            defaultRoot()
-        }
-        backend = if (rootDoc.uri.scheme == "file") {
-            FileBackend(appContext, rootDoc)
-        } else {
-            SafBackend(appContext, rootDoc)
-        }
+        rootDoc = defaultRoot()
+        backend = FileBackend(appContext, rootDoc)
     }
 
     /** 默认目录：Android/data/<包名>/files/wallpapers（外部存储不可用时回退内部私有目录） */
@@ -63,9 +52,6 @@ class WallpaperCache(context: Context) {
         root.mkdirs()
         return DocumentFile.fromFile(root)
     }
-
-    /** 当前是否使用默认目录 */
-    val isDefaultDir: Boolean get() = prefs.cacheDirUri.isBlank()
 
     /** 缓存队列当前数量 */
     fun cachedCount(): Int = backend.cachedItems().size
@@ -327,86 +313,4 @@ class WallpaperCache(context: Context) {
                 .forEach { it.delete() }
         }
     }
-
-    /** 自定义目录后端：SAF DocumentFile 操作（复制 + 删除实现移动） */
-    private class SafBackend(private val appContext: Context, private val root: DocumentFile) : Backend {
-        private fun cacheDir(): DocumentFile =
-            root.findFile(DIR_CACHE) ?: root.createDirectory(DIR_CACHE)!!
-
-        private fun appliedDir(): DocumentFile =
-            root.findFile(DIR_APPLIED) ?: root.createDirectory(DIR_APPLIED)!!
-
-        override fun cachedItems(): List<DocumentFile> =
-            cacheDir().listFiles().sortedBy { it.name }
-
-        override fun appliedItems(): List<DocumentFile> =
-            appliedDir().listFiles().sortedByDescending { it.name }
-
-        override fun takeForApply(): DocumentFile? {
-            val next = cachedItems().firstOrNull() ?: return null
-            val name = next.name ?: return null
-            val dir = appliedDir()
-            val target = dir.findFile(name)
-                ?: dir.createFile(mimeOf(name), name) ?: return null
-            if (copyDoc(next, target)) {
-                next.delete()
-                trimApplied()
-                return target
-            }
-            return null
-        }
-
-        override fun importTempFile(temp: File, name: String, intoApplied: Boolean): DocumentFile? {
-            val dir = if (intoApplied) appliedDir() else cacheDir()
-            val doc = dir.findFile(name) ?: dir.createFile(mimeOf(name), name) ?: return null
-            val ok = runCatching {
-                temp.inputStream().use { ins ->
-                    appContext.contentResolver.openOutputStream(doc.uri)?.use { out -> ins.copyTo(out) }
-                }
-            }.isSuccess
-            temp.delete()
-            if (!ok) doc.delete()
-            trimApplied()
-            return doc.takeIf { it.exists() }
-        }
-
-        private fun copyDoc(src: DocumentFile, dst: DocumentFile): Boolean = runCatching {
-            appContext.contentResolver.openInputStream(src.uri)?.use { ins ->
-                appContext.contentResolver.openOutputStream(dst.uri)?.use { out -> ins.copyTo(out) }
-            }
-        }.isSuccess
-
-        override fun decode(doc: DocumentFile, maxDimension: Int): Bitmap? {
-            val opts1 = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            appContext.contentResolver.openInputStream(doc.uri)?.use {
-                BitmapFactory.decodeStream(it, null, opts1)
-            } ?: return null
-            if (opts1.outWidth <= 0 || opts1.outHeight <= 0) return null
-
-            var sample = 1
-            if (maxDimension > 0) {
-                val longest = maxOf(opts1.outWidth, opts1.outHeight)
-                while (longest / sample > maxDimension) sample *= 2
-            }
-            val opts2 = BitmapFactory.Options().apply { inSampleSize = sample }
-            return appContext.contentResolver.openInputStream(doc.uri)?.use {
-                BitmapFactory.decodeStream(it, null, opts2)
-            }
-        }
-
-        override fun openStream(doc: DocumentFile): java.io.InputStream =
-            appContext.contentResolver.openInputStream(doc.uri)
-                ?: throw java.io.IOException("无法打开：${doc.name}")
-
-        private fun trimApplied() {
-            val files = appliedItems()
-            if (files.size <= MAX_APPLIED) return
-            files.sortedBy { it.name }
-                .take(files.size - MAX_APPLIED)
-                .forEach { it.delete() }
-        }
-    }
 }
-
-/** 按文件名推断 MIME（SAF createFile 需要） */
-private fun mimeOf(name: String): String = if (name.endsWith(".png")) "image/png" else "image/jpeg"

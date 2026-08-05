@@ -25,7 +25,7 @@ data class WallpaperLog(
  * - 图片 API 地址
  * - 壁纸目标（主屏幕 / 锁屏 / 主屏+锁屏）
  * - 定时切换开关与间隔
- * - 缓存预取数量（2~5 张）与壁纸记录保留条数
+ * - 缓存预取数量（默认 100 张，队列上限）与壁纸记录保留条数
  * - 最近换壁纸记录（成功/失败均记录，条数可配置，供"壁纸记录"页展示）
  */
 class PreferenceStore(context: Context) {
@@ -77,16 +77,6 @@ class PreferenceStore(context: Context) {
             .coerceAtLeast(MIN_LOG_MAX_COUNT)
         set(value) {
             sp.edit().putInt(KEY_LOG_MAX_COUNT, value.coerceAtLeast(MIN_LOG_MAX_COUNT)).apply()
-        }
-
-    /**
-     * 自定义缓存目录（SAF 授权的 content:// URI 字符串，持久化）。
-     * 为空 = 使用默认目录（Android/data/<包名>/files/wallpapers）。
-     */
-    var cacheDirUri: String
-        get() = sp.getString(KEY_CACHE_DIR_URI, "") ?: ""
-        set(value) {
-            sp.edit().putString(KEY_CACHE_DIR_URI, value).apply()
         }
 
     /** 追加一条换壁纸记录，并裁剪到最近 [logMaxCount] 条 */
@@ -151,16 +141,15 @@ class PreferenceStore(context: Context) {
         private const val KEY_SCHEDULE_INTERVAL_MS = "schedule_interval_ms"
         private const val KEY_CACHE_SIZE = "cache_size"
         private const val KEY_LOG_MAX_COUNT = "log_max_count"
-        private const val KEY_CACHE_DIR_URI = "cache_dir_uri"
         private const val KEY_LOGS = "wallpaper_logs"
 
         /** 默认定时间隔：2 小时 */
         const val DEFAULT_INTERVAL_MS = 2 * 60 * 60 * 1000L
 
-        /** 缓存预取数量范围与默认值 */
+        /** 缓存预取数量范围与默认值（队列上限放开到 100） */
         const val MIN_CACHE_SIZE = 2
-        const val MAX_CACHE_SIZE = 5
-        const val DEFAULT_CACHE_SIZE = 3
+        const val MAX_CACHE_SIZE = 100
+        const val DEFAULT_CACHE_SIZE = 100
 
         /** 记录条数默认值与下限 */
         const val MIN_LOG_MAX_COUNT = 10

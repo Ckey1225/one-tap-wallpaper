@@ -1,15 +1,20 @@
 package com.example.wallpaper.ui.log
 
+import android.Manifest
 import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,8 +45,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +91,27 @@ private fun CacheGalleryScreen(context: Context) {
     val cache = remember { WallpaperCache(appContext) }
     val cacheSize = remember { com.example.wallpaper.data.PreferenceStore(appContext).cacheSize }
     val files = remember { cache.cachedItems().take(WallpaperCache.MAX_APPLIED) }
+
+    // Android 10 以下（API <29）保存到相册需 WRITE_EXTERNAL_STORAGE 运行时权限
+    var pendingDoc by remember { mutableStateOf<DocumentFile?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        pendingDoc?.let { if (granted) saveToGallery(appContext, cache, it) }
+        pendingDoc = null
+    }
+    val saveOrRequest: (DocumentFile) -> Unit = { doc ->
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(
+                appContext, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingDoc = doc
+            permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            saveToGallery(appContext, cache, doc)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -136,7 +164,7 @@ private fun CacheGalleryScreen(context: Context) {
                         cache = cache,
                         doc = file,
                         modifier = modifier,
-                        onLongPress = { saveToGallery(appContext, cache, file) }
+                        onLongPress = { saveOrRequest(file) }
                     )
                 }
             }
