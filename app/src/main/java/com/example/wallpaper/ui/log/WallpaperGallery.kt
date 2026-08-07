@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +48,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.example.wallpaper.data.WallpaperCache
+import com.example.wallpaper.domain.WallpaperChanger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -70,6 +74,7 @@ fun WallpaperGallery(
 ) {
     // 保存到相册的运行时权限（API<29）；launcher 必须在组合最外层声明
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var pendingDoc by remember { mutableStateOf<DocumentFile?>(null) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -88,6 +93,14 @@ fun WallpaperGallery(
         }
     }
 
+    val onClick: (DocumentFile) -> Unit = { doc ->
+        scope.launch {
+            Toast.makeText(context, "正在应用…", Toast.LENGTH_SHORT).show()
+            val result = WallpaperChanger.changeFromFile(context, doc)
+            Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     if (files.isEmpty()) {
         Box(
             modifier = modifier.fillMaxSize(),
@@ -98,30 +111,46 @@ fun WallpaperGallery(
         return
     }
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item(span = { GridItemSpan(2) }) {
-            Text(
-                text = headerText,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(4.dp))
+    // 根据可用宽度自适应列数：
+    // - 横屏大屏（>= 900dp）：5 列
+    // - 竖屏手机（≥ 600dp）：3 列
+    // - 竖屏窄屏（<600dp）：2 列
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val totalWidthDp = maxWidth
+        val cols = when {
+            totalWidthDp >= 900.dp -> 5
+            totalWidthDp >= 600.dp -> 3
+            else -> 2
         }
-        items(files) { file ->
-            Column {
-                WallpaperThumbnail(
-                    cache = cache,
-                    doc = file,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(9f / 16f),
-                    onLongPress = { save(file) }
+
+        val contentPadding = 16.dp
+        val spacing = 12.dp
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(cols),
+            contentPadding = PaddingValues(contentPadding),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item(span = { GridItemSpan(cols) }) {
+                Text(
+                    text = headerText,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(4.dp))
+            }
+            items(files) { file ->
+                Column {
+                    WallpaperThumbnail(
+                        cache = cache,
+                        doc = file,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(9f / 16f),
+                        onClick = { onClick(file) },
+                        onLongPress = { save(file) }
+                    )
+                }
             }
         }
     }
@@ -134,6 +163,7 @@ private fun WallpaperThumbnail(
     cache: WallpaperCache,
     doc: DocumentFile,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
     val bitmap by produceState<ImageBitmap?>(null, doc.uri) {
@@ -143,7 +173,7 @@ private fun WallpaperThumbnail(
     }
     Box(
         modifier = modifier
-            .combinedClickable(onClick = { /* 点击暂无操作，长按保存 */ }, onLongClick = onLongPress)
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress)
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center

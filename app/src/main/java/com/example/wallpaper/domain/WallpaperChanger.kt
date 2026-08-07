@@ -2,6 +2,7 @@ package com.example.wallpaper.domain
 
 import android.content.Context
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import com.example.wallpaper.data.PreferenceStore
 import com.example.wallpaper.data.WallpaperCache
 import com.example.wallpaper.data.WallpaperRepository
@@ -23,7 +24,10 @@ enum class ChangeEntry(val label: String) {
     MANUAL("设置页"),
 
     /** 长按图标磁贴"切换上一张" */
-    PREVIOUS("上一张")
+    PREVIOUS("上一张"),
+
+    /** 缓存/记录页单击某张图，直接设为壁纸 */
+    GALLERY("单点")
 }
 
 /**
@@ -107,6 +111,39 @@ object WallpaperChanger {
      * 从已应用历史中取"当前壁纸的上一张"（历史最新在前，[0]=当前、[1]=上一张），
      * 重新应用到目标壁纸；不改变缓存队列与历史文件本身，仅写入一条记录。
      */
+    /**
+     * 从缓存 / 历史记录中单击某张壁纸直接应用。
+     *
+     * 适用于设置页「缓存」「记录」两个标签，用户触点图片即换壁纸。
+     * 直接从本地文件解码并设置，不涉及网络 / API 地址，不改变缓存队列。
+     *
+     * @param context 上下文（内部统一使用 applicationContext）
+     * @param doc     已存储的壁纸文件（缓存 / 已应用均可）
+     * @return 换壁纸结果
+     */
+    suspend fun changeFromFile(context: Context, doc: DocumentFile): ChangeResult {
+        val appContext = context.applicationContext
+        val prefs = PreferenceStore(appContext)
+        val target = prefs.target
+        val cache = WallpaperCache(appContext)
+
+        return try {
+            val bitmap = cache.decodeImage(doc)
+                ?: throw IOException("壁纸文件解码失败")
+            WallpaperManagerWrapper.setWallpaper(appContext, bitmap, target)
+            prefs.addLog(ChangeEntry.GALLERY.name, true,
+                "已应用（${target.displayName}）", doc.name ?: "")
+            if (prefs.scheduleEnabled) {
+                WallpaperScheduler.schedule(appContext, prefs.scheduleIntervalMs)
+            }
+            ChangeResult(success = true, message = "已应用（${target.displayName}）")
+        } catch (t: Throwable) {
+            val result = ChangeResult(success = false, message = t.message ?: "未知错误")
+            prefs.addLog(ChangeEntry.GALLERY.name, false, result.message, doc.name ?: "")
+            result
+        }
+    }
+
     suspend fun changePrevious(context: Context): ChangeResult {
         val appContext = context.applicationContext
         val prefs = PreferenceStore(appContext)
