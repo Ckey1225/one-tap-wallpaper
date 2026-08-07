@@ -50,7 +50,7 @@ object ShortcutHelper {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             val settingsShortcut = builder
                 .setShortLabel(context.getString(R.string.shortcut_settings_name))
-                .setIcon(IconCompat.createWithResource(context, R.drawable.ic_launcher))
+                .setIcon(IconCompat.createWithResource(context, R.drawable.ic_tile_settings))
                 .setIntent(settingsIntent)
                 .build()
 
@@ -67,7 +67,7 @@ object ShortcutHelper {
             }
             val previousShortcut = previousBuilder
                 .setShortLabel(context.getString(R.string.shortcut_previous_name))
-                .setIcon(IconCompat.createWithResource(context, R.drawable.ic_launcher))
+                .setIcon(IconCompat.createWithResource(context, R.drawable.ic_tile_mountain))
                 .setIntent(previousIntent)
                 .build()
 

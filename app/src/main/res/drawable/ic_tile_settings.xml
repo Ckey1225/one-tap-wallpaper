@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面磁贴「设置」图标：同款渐变底 + 白色调节滑杆（象征设置） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0 h108 v108 h-108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0" android:startY="0"
+                android:endX="0" android:endY="108"
+                android:startColor="#6C8CFF"
+                android:centerColor="#4056C9"
+                android:endColor="#2B3A8F" />
+        </aapt:attr>
+    </path>
+
+    <!-- 第 1 条滑杆 -->
+    <path
+        android:fillColor="#E6FFFFFF"
+        android:pathData="M24,34 h60 a6,6 0 0 1 0,12 h-60 a6,6 0 0 1 0,-12 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M58,40 a9,9 0 1,1 -18,0 a9,9 0 1,1 18,0" />
+    <!-- 第 2 条滑杆 -->
+    <path
+        android:fillColor="#E6FFFFFF"
+        android:pathData="M24,54 h44 a6,6 0 0 1 0,12 h-44 a6,6 0 0 1 0,-12 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M86,60 a9,9 0 1,1 -18,0 a9,9 0 1,1 18,0" />
+    <!-- 第 3 条滑杆 -->
+    <path
+        android:fillColor="#E6FFFFFF"
+        android:pathData="M24,74 h30 a6,6 0 0 1 0,12 h-30 a6,6 0 0 1 0,-12 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M58,80 a9,9 0 1,1 -18,0 a9,9 0 1,1 18,0" />
+</vector>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面磁贴「切换上一张」图标：渐变底 + 山峰太阳剪影（自包含单图） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0 h108 v108 h-108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0" android:startY="0"
+                android:endX="0" android:endY="108"
+                android:startColor="#6C8CFF"
+                android:centerColor="#4056C9"
+                android:endColor="#2B3A8F" />
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M80,20 a10,10 0 1,0 0,20 a10,10 0 1,0 0,-20" />
+    <path
+        android:fillColor="#8CFFFFFF"
+        android:pathData="M40,88 L66,52 L96,88 L118,88 L118,116 L40,116 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18,90 L50,58 L84,90 L84,116 L18,116 Z" />
+</vector>

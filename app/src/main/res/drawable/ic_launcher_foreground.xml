@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标前景：极简山峰 + 太阳剪影（白色，置于中央安全区内） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 太阳（右上天空） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M80,20 a10,10 0 1,0 0,20 a10,10 0 1,0 0,-20" />
+
+    <!-- 远山（半透明，营造层次） -->
+    <path
+        android:fillColor="#8CFFFFFF"
+        android:pathData="M40,88 L66,52 L96,88 L118,88 L118,116 L40,116 Z" />
+
+    <!-- 近山（实心白） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18,90 L50,58 L84,90 L84,116 L18,116 Z" />
+</vector>
