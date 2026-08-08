@@ -4,8 +4,10 @@ build/
 **/build/
 *.apk
 *.aab
-*.keystore
-*.jks
+
+# 签名密钥（按用户要求上传 GitHub 备份）——勿改回忽略
+# *.keystore
+# *.jks
 
 # 本地 SDK / 构建工具（不入库）
 .build-tools/

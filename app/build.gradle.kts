@@ -1,6 +1,14 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+// 读取不入库的本地签名配置（local.properties）
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -11,8 +19,26 @@ android {
         applicationId = "com.example.wallpaper"
         minSdk = 24            // Android 7.0，覆盖锁屏壁纸 API（API 24+）
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.1.4"
+        versionCode = 7
+        versionName = "1.1.5"
+    }
+
+    signingConfigs {
+        create("release") {
+            val storeFile = localProps.getProperty("STORE_FILE")
+            val storePassword = localProps.getProperty("STORE_PASSWORD")
+            val keyAlias = localProps.getProperty("KEY_ALIAS")
+            val keyPassword = localProps.getProperty("KEY_PASSWORD")
+            // 仅当签名配置齐全时启用正式签名，避免竞对方误触导出混淆
+            if (!storeFile.isNullOrBlank() && !storePassword.isNullOrBlank()
+                && !keyAlias.isNullOrBlank() && !keyPassword.isNullOrBlank()
+            ) {
+                this.storeFile = file(storeFile)
+                this.storePassword = storePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -23,8 +49,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 使用 debug 签名（无自定义密钥库，便于直接安装）
-            signingConfig = signingConfigs.getByName("debug")
+            // 使用正式签名（keystore 与密码保存在不入库的 local.properties；缺失时回退 debug 签名便于开发）
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
     }
 
